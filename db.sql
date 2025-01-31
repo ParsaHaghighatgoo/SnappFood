@@ -394,25 +394,6 @@ END //
 
 DELIMITER ;
 
-
-DELIMITER //
-
-
--- ----------------------------------------------
-
-CREATE PROCEDURE HandleOrder(
-    IN orderId INT,
-    IN newStatus VARCHAR(50)
-)
-BEGIN
-    UPDATE `Order`
-    SET Status = newStatus
-    WHERE `order`.OrderId = orderId;
-END //
-
-DELIMITER ;
-
-
 DELIMITER //
 
 CREATE PROCEDURE AddAddress(
@@ -766,18 +747,6 @@ DELIMITER ;
 
 -- ------------------------------------- check this out
 drop procedure GetOrderHistory;
-drop procedure Placeorder;
-DELIMITER //
-
-CREATE PROCEDURE NewOrder(
-    IN aId INT
-)
-BEGIN
-    INSERT INTO `Order` (AddressId, Status)
-    VALUES (aId, 'Not Approved');
-END //
-
-DELIMITER ;
 call NewOrder(1);
 
 DELIMITER //
@@ -876,3 +845,145 @@ END //
 
 DELIMITER ;
 call setdefaultaddress(1,1);
+
+
+update `order` set `order`.status = 'Not Approved' where `order`.orderID = 3 or `order`.orderID = 4 or `order`.orderID = 6;
+-- Alter the Order table to restrict Status to specific values
+ALTER TABLE `Order`
+MODIFY COLUMN Status ENUM('Not Approved', 'Reject', 'Pending', 'Done', 'Cancelled') NOT NULL DEFAULT 'Not Approved';
+
+Drop procedure HandleOrder;
+DELIMITER //
+
+CREATE PROCEDURE setOrderStatus(
+    IN orderId INT,
+    IN newStatus ENUM('Not Approved', 'Reject', 'Pending', 'Done', 'Cancelled')
+)
+BEGIN
+    UPDATE `Order`
+    SET Status = newStatus
+    WHERE `Order`.OrderId = orderId;
+END //
+
+DELIMITER ;
+
+drop procedure neworder;
+DELIMITER //
+
+CREATE PROCEDURE NewOrder(
+    IN aId INT
+)
+BEGIN
+    INSERT INTO `Order` (AddressId, Status)
+    VALUES (aId, 'Not Approved');
+END //
+
+DELIMITER ;
+
+call setOrderStatus(7,'Done');
+
+DELIMITER //
+
+CREATE PROCEDURE GetPendingOrdersByRestaurantId(
+    IN rId INT
+)
+BEGIN
+    SELECT DISTINCT o.OrderId, o.AddressId, o.Status
+    FROM `Order` o
+    INNER JOIN OrderDetail od ON o.OrderId = od.OrderId
+    INNER JOIN Item i ON od.ItemId = i.ItemId
+    WHERE i.RestaurantId = rId AND o.Status = 'Pending';
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE GetRestaurantsByManager(
+    IN userId INT
+)
+BEGIN
+    SELECT 
+        r.RestaurantId,
+        r.Name,
+        r.Photo,
+        r.MinPurchase,
+        r.City,
+        r.Address,
+        r.Coordinate,
+        r.IsDeleted
+    FROM 
+        RestaurantManager rm
+    INNER JOIN 
+        Restaurant r ON rm.RestaurantId = r.RestaurantId
+    WHERE 
+        rm.UserId = userId AND r.IsDeleted = 0; -- Exclude soft-deleted restaurants
+END //
+
+DELIMITER ;
+
+-- ------------------------------------------------------------here 
+DELIMITER //
+
+CREATE PROCEDURE EditWorkingTime(
+    IN restaurantId INT,
+    IN dayName VARCHAR(20),
+    IN newOpenAt TIME,
+    IN newCloseAt TIME
+)
+BEGIN
+    -- Update the working time for the specific day and restaurant
+    UPDATE WorkingTime
+    SET 
+        workingtime.OpenAt = newOpenAt,
+        workingtime.CloseAt = newCloseAt
+    WHERE 
+        workingtime.RestaurantId = restaurantId AND workingtime.Day = dayName;
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE AddDeliveryFee(
+    IN restaurantId INT,
+    IN price DECIMAL(10, 2),
+    IN tenderArea BOOLEAN
+)
+BEGIN
+    INSERT INTO DeliveryFee (RestaurantId, Price, TenderArea)
+    VALUES (restaurantId, price, tenderArea);
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE EditDeliveryFee(
+    IN feeId INT,
+    IN columnName VARCHAR(50),
+    IN newValue VARCHAR(255)
+)
+BEGIN
+    -- Build the dynamic SQL query
+    SET @query = CONCAT('UPDATE DeliveryFee SET ', columnName, ' = "', newValue, '" WHERE FeeId = ', feeId);
+    
+    -- Prepare and execute the dynamic query
+    PREPARE stmt FROM @query;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE DeleteDeliveryFee(
+    IN feeId INT
+)
+BEGIN
+    DELETE FROM DeliveryFee
+    WHERE deliveryfee.FeeId = feeId;
+END //
+
+DELIMITER ;
