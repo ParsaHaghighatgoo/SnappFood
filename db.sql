@@ -987,3 +987,127 @@ BEGIN
 END //
 
 DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE GetDeliveryFeeByRestaurantId(
+    IN restaurantId INT
+)
+BEGIN
+    SELECT 
+        FeeId,
+        RestaurantId,
+        Price,
+        TenderArea
+    FROM 
+        DeliveryFee
+    WHERE 
+        deliveryfee.RestaurantId = restaurantId;
+END //
+
+DELIMITER ;
+
+call AddDeliveryFee(1,20,0);
+call AddDeliveryFee(2,80,1);
+call AddDeliveryFee(3,40,0);
+call AddDeliveryFee(4,65,1);
+call AddDeliveryFee(5,10,0);
+
+select * from restaurant;
+select * from address;
+
+DELIMITER //
+
+CREATE PROCEDURE CalculateTotalPrice(
+    IN orderId INT,
+    OUT totalPrice DECIMAL(10, 2)
+)
+BEGIN
+    DECLARE restaurantId INT;
+    DECLARE addressId INT;
+    DECLARE deliveryFee DECIMAL(10, 2);
+    DECLARE coordinateDifference DECIMAL(10, 2);
+
+    -- Initialize total price to 0
+    SET totalPrice = 0;
+
+    -- Get the RestaurantId and AddressId related to the order
+    SELECT 
+        R.RestaurantId,
+        A.AddId
+    INTO 
+        restaurantId,
+        addressId
+    FROM 
+        `Order` O
+        JOIN Address A ON O.AddressId = A.AddId
+        JOIN Restaurant R ON R.RestaurantId = (
+            SELECT DISTINCT I.RestaurantId
+            FROM OrderDetail OD
+            JOIN Item I ON OD.ItemId = I.ItemId
+            WHERE OD.OrderId = orderId
+            LIMIT 1
+        )
+    WHERE O.OrderId = orderId;
+
+    -- Sum up the prices of all items in the OrderDetail for the given OrderId
+    SELECT 
+        SUM(Price) 
+    INTO 
+        totalPrice
+    FROM 
+        OrderDetail
+    WHERE 
+        orderdetail.OrderId = orderId;
+
+    -- Calculate the coordinate difference (this is an example; replace with the actual formula or function for distance)
+    SELECT 
+        ABS((SELECT Coordinate FROM Restaurant WHERE restaurant.RestaurantId = restaurantId) -
+            (SELECT Coordinate FROM Address WHERE address.AddId = addressId))
+    INTO 
+        coordinateDifference;
+
+    -- Determine the delivery fee based on the distance
+    IF coordinateDifference > 25 THEN
+        SELECT 
+            Price 
+        INTO 
+            deliveryFee
+        FROM 
+            DeliveryFee
+        WHERE 
+            deliveryfee.RestaurantId = restaurantId AND deliveryfee.TenderArea = 1;
+    ELSE
+        SELECT 
+            Price 
+        INTO 
+            deliveryFee
+        FROM 
+            DeliveryFee
+        WHERE 
+            deliveryfee.RestaurantId = restaurantId AND deliveryfee.TenderArea = 0;
+    END IF;
+
+    -- Add the delivery fee to the total price
+    SET totalPrice = totalPrice + deliveryFee;
+
+END //
+
+DELIMITER ;
+
+CALL CalculateTotalPrice(2, @totalPrice);
+SELECT @totalPrice;
+
+DELIMITER //
+
+CREATE PROCEDURE GetDefaultAddressByUserId(
+    IN userId INT
+)
+BEGIN
+    -- Fetch the default address for the given user ID
+    SELECT AddId, UserId, DefaultAddress, City, AddressDetail, Coordinate
+    FROM Address
+    WHERE address.UserId = userId AND address.DefaultAddress = 1;
+END //
+
+DELIMITER ;
